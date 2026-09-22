@@ -15,7 +15,7 @@ sequenceDiagram
     participant State as External state listener
 
     App->>Lib: new Drone()
-    Lib->>Lib: resolve host; connect DatagramSocket
+    Lib->>Lib: resolve host, connect DatagramSocket
     App->>Lib: send "command"
     Lib->>T: UDP command datagram
     T-->>Lib: "ok" or "error"
