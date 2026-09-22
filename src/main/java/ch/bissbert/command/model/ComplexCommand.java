@@ -8,7 +8,7 @@ import java.util.StringJoiner;
 
 public class ComplexCommand extends AbstractCommand {
 
-    LinkedList<Object> parameters;
+    LinkedList<Object> parameters = new LinkedList<>();
 
     public ComplexCommand(String command, boolean isRead) {
         super(command, isRead);
