@@ -56,7 +56,9 @@ public abstract class CommandExecutor {
         }else {
             connection.sendCommand(command);
         }
-        after.run();
+        if (after != null) {
+            after.run();
+        }
     }
 
     public CommandExecutor andThen(CommandExecutor executor) {
