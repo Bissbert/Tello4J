@@ -2,9 +2,20 @@
 
 # Bugs found
 
-This file records defects found while documenting the current source. None of
-the fixes below were applied. The line numbers refer to the source inspected
-for this pass.
+This file records defects found while documenting the source as it stood. None
+of the fixes below were applied during the documentation pass itself. The line
+numbers refer to the source inspected for this pass.
+
+> **Since this pass:** an independent adjudication confirmed all five entries.
+> A subsequent fix pass applied three of them to the default branch: the
+> uninitialized `ComplexCommand.parameters` in commit `42c9dff`, the terminal
+> executor's null successor in commit `35081a4`, and the closed-socket guard in
+> commit `8970c18`. Two were deferred because each needs a public API decision
+> rather than a patch — the missing receive timeout (the default value and the
+> caller contract for `SocketTimeoutException` have to be chosen) and the
+> constructor that continues after a setup failure (whether the failure should
+> be checked or unchecked). Read the reproductions and diffs below as the state
+> at the time of the pass, not as the current state of the default branch.
 
 ## `ComplexCommand.parameters` is never initialized
 
