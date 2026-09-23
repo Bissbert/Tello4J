@@ -42,7 +42,7 @@ public class Connection implements AutoCloseable, CommandSender {
     @Override
     public synchronized void sendCommand(String command) throws IOException {
         Objects.requireNonNull(command);
-        if (socket.isConnected()) {
+        if (socket.isConnected() && !socket.isClosed()) {
             logger.info("executing command '"+command+"'");
             final byte[] commandBytes = command.getBytes(StandardCharsets.UTF_8);
             final DatagramPacket commandPacket = new DatagramPacket(commandBytes, commandBytes.length, address, port);
