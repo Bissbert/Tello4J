@@ -170,17 +170,26 @@ table in [`docs/protocol.md`](docs/protocol.md) is emitted by
   or frame decoder.
 - `Connection.fetchDataByte()` blocks on `DatagramSocket.receive()` and never
   configures a socket timeout. A missing reply can therefore park the caller.
-- `ComplexCommand.parameters` is never initialized, so `addParam()` fails
-  before a complex command can be composed.
-- `CommandExecutor.run()` always calls `after.run()`, including for a final
-  command with no successor. The final command therefore fails after sending.
-- Closing a `Connection` does not update a library state flag; a later send
-  reaches the socket and throws instead of returning a library-level error.
+  A finite timeout would be a public behavior change — the default value and
+  the caller contract for `SocketTimeoutException` both have to be chosen — so
+  none was introduced.
 - A failed `Connection` setup is printed and then followed by `connect()`, so
-  an invalid host or socket setup can fail again through a null field.
+  an invalid host or socket setup can fail again through a null field. Fixing
+  this needs an API decision — whether an initialization failure should surface
+  as a checked or an unchecked exception — so the constructor is unchanged.
 - `Drone` has no constructor for a custom host or port. Tests and alternate
   Tello network layouts must use `Connection` directly.
 - No flight program was run against a real aircraft in this pass. The diagrams
   are protocol documentation, not a flight recording.
+
+Three further defects recorded during this pass have since been fixed on the
+default branch: `ComplexCommand.parameters` was never initialized, so
+`addParam()` failed before a complex command could be composed;
+`CommandExecutor.run()` called `after.run()` even for a final command with no
+successor; and a send after `close()` reached the socket instead of taking the
+library's `NoConnectionException` path. Each command now gets its own parameter
+list, a terminal executor skips the missing successor, and `sendCommand()`
+requires a socket that is both connected and not closed. See
+[`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md).
 
 [sdk]: https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf
