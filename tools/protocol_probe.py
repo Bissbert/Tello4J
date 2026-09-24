@@ -51,9 +51,10 @@ CHECK_LABELS = {
     "complex-addparam":     "ComplexCommand.addParam() adds a parameter",
     "executor-no-connection": "CommandExecutor.run() throws NPE without createConnection()",
     "executor-chain-tail":  "CommandExecutor.run() stops at the end of a chain",
+    "executor-with-param":  "CommandExecutor with withParam() sends its parameters",
     "send-after-close":     "sendCommand() after close() throws NoConnectionException",
-    "construct-bad-host":   "unresolvable host: constructor throws NPE",
-    "no-so-timeout":        "fetchDataString() never times out when nothing replies",
+    "construct-bad-host":   "unresolvable host: constructor throws with the cause",
+    "receive-timeout":      "fetchDataString() times out when nothing replies",
 }
 
 

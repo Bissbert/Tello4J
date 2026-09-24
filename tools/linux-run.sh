@@ -23,9 +23,10 @@ java -version 2>&1 | head -1
 mvn -v 2>/dev/null | head -1
 python3 --version
 
-section "mvn -B -q clean package"
-mvn -B -q clean package >/tmp/mvn.log 2>&1
+section "mvn -B clean package (compiles and runs the JUnit suite)"
+mvn -B clean package >/tmp/mvn.log 2>&1
 echo "exit=$?"
+grep -E "Tests run:|BUILD" /tmp/mvn.log | sed "s/^\[[A-Z]*\] //"
 
 section "python3 tools/inventory.py"
 python3 tools/inventory.py
