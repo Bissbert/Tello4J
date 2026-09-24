@@ -33,6 +33,7 @@ public class ProtocolProbe {
         executorRunWithoutConnection();
         executorChainTail();
         sendAfterClose();
+        constructorBadHost();
         receiveHasNoTimeout();
 
         System.out.flush();
@@ -112,14 +113,16 @@ public class ProtocolProbe {
                 "BasicCommand(CommandStrings.SET_WIFI).compose() = " + quote(composed));
     }
 
-    /** ComplexCommand.parameters is declared but never assigned. */
+    /** Each ComplexCommand has its own parameter list (fixed in 42c9dff). */
     private static void complexCommandAddParam() {
         try {
-            new ComplexCommand("go", false).addParam(20);
-            check("complex-addparam", false, "addParam(20) returned normally");
+            ComplexCommand c = new ComplexCommand("forward", false);
+            c.addParam(20);
+            String composed = c.compose();
+            check("complex-addparam", "forward 20".equals(composed),
+                    "addParam(20), compose() = " + quote(composed));
         } catch (Throwable t) {
-            check("complex-addparam", t instanceof NullPointerException,
-                    "addParam(20) threw " + t.getClass().getName());
+            check("complex-addparam", false, "addParam(20) threw " + t.getClass().getName());
         }
     }
 
@@ -135,23 +138,22 @@ public class ProtocolProbe {
         }
     }
 
-    /** run() always calls after.run(); the last executor in a chain has no successor. */
+    /** The last executor in a chain has no successor and stops there (fixed in 35081a4). */
     private static void executorChainTail() {
         Connection c = new Connection(HOST, port);
         CommandExecutor.connection = c;
         try {
             CommandExecutor.execute(CommandStrings.COMMAND).run();
-            check("executor-chain-tail", false, "run() returned normally");
+            check("executor-chain-tail", true, "run() sent the command and returned");
         } catch (Throwable t) {
-            check("executor-chain-tail", t instanceof NullPointerException,
-                    "run() sent the command, then threw " + t.getClass().getName());
+            check("executor-chain-tail", false, "run() threw " + t.getClass().getName());
         } finally {
             CommandExecutor.connection = null;
             c.close();
         }
     }
 
-    /** DatagramSocket.isConnected() stays true after close(), so the guard misses. */
+    /** The guard also checks isClosed() (fixed in 8970c18). */
     private static void sendAfterClose() {
         Connection c = new Connection(HOST, port);
         c.close();
@@ -159,7 +161,18 @@ public class ProtocolProbe {
             c.sendCommand("land");
             check("send-after-close", false, "sendCommand() returned normally");
         } catch (Throwable t) {
-            check("send-after-close", true, t.getClass().getName() + ": " + t.getMessage());
+            check("send-after-close", t instanceof ch.bissbert.connection.exception.NoConnectionException,
+                    "threw " + t.getClass().getName());
+        }
+    }
+
+    /** The constructor prints a setup failure, then calls connect() anyway (open). */
+    private static void constructorBadHost() {
+        try (Connection c = new Connection("does-not-exist.invalid", port)) {
+            check("construct-bad-host", false, "constructor returned normally");
+        } catch (Throwable t) {
+            check("construct-bad-host", t instanceof NullPointerException,
+                    "constructor threw " + t.getClass().getName());
         }
     }
 

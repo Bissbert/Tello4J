@@ -27,11 +27,11 @@ flowchart LR
 ```
 
 `AbstractCommand` stores the wire text and a boolean read flag. `BasicCommand`
-returns that text unchanged. `ComplexCommand` is intended to append parameters
-with spaces, but its `parameters` field is declared and never initialized. As
-a result, calling `addParam()` currently throws before a parameterized command
-can be composed. The local probe in `tools/` records this as an observed
-behavior; it is documented here rather than hidden behind a workaround.
+returns that text unchanged. `ComplexCommand` appends its parameters
+with spaces: after `addParam(20)`, a `forward` command composes to
+`forward 20`. Each command has its own parameter list (fixed in `42c9dff`;
+see [Bugs found](BUGS-FOUND.md)). `addParam(null)` logs a warning and adds
+nothing.
 
 ## `CommandExecutor`
 
@@ -61,12 +61,15 @@ sequenceDiagram
     else write command
         Exec->>Conn: sendCommand(command)
     end
-    Exec->>Exec: after.run()
+    opt successor set with andThen()
+        Exec->>Exec: after.run()
+    end
 ```
 
-The last call is unconditional. `andThen()` stores only one successor, so a
-tail executor with no successor throws after its own send/read operation. The
-executor also uses one static connection shared by all executor instances.
+`andThen()` stores one successor. The last executor in a chain has none and
+stops after its own send or read (fixed in `35081a4`). `run()` does not create
+a connection: without `createConnection()` it throws `NullPointerException`.
+All executor instances share one static connection.
 For predictable behavior, the direct `Connection` API is easier to audit.
 
 ## Class responsibilities

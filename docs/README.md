@@ -4,16 +4,16 @@
 
 The write-ups follow the path from the aircraft-facing UDP socket to the
 command vocabulary and the higher-level builders. [`measurement.md`](measurement.md)
-records how the repository numbers and the localhost probe results were
-produced.
+records the Linux container run behind the repository numbers and the
+localhost probe.
 
 | Subsystem | Source covered | Write-up |
 |---|---|---|
 | Connection and transport | `Connection`, `Drone`, controllers, `CommandSender` | [`connection.md`](connection.md) |
 | Command model and execution | `Command`, `BasicCommand`, `ComplexCommand`, `CommandExecutor`, `Reference` | [`commands.md`](commands.md) |
 | SDK command vocabulary | `CommandStrings` and the wire sequence | [`protocol.md`](protocol.md) |
-| Measurement method | build, inventory, command table, local UDP probe | [`measurement.md`](measurement.md) |
-| Bugs found | current-source defects and unapplied fixes | [`BUGS-FOUND.md`](BUGS-FOUND.md) |
+| Measurement method | Linux build, inventory, command table, local UDP probe | [`measurement.md`](measurement.md) |
+| Bugs found | three fixed defects and two open ones | [`BUGS-FOUND.md`](BUGS-FOUND.md) |
 
 The code has no telemetry or video consumer. The protocol diagrams therefore
 show those streams as external responsibilities rather than pretending that

@@ -41,8 +41,8 @@ Build the library from the repository root:
 mvn -B -q clean package
 ```
 
-The build command above was run successfully during this documentation pass.
-To fly, put the built jar and its Log4j dependency on your application's
+This build runs in the Linux container used for the
+[measurements](docs/measurement.md). To fly, put the built jar and its Log4j dependency on your application's
 classpath, then use the smallest direct API path:
 
 ```java
@@ -127,22 +127,22 @@ received UTF-8 payload instead.
 | Read commands | `sendCommandAndFetchData()` and status helper | One blocking receive, no timeout |
 | Telemetry | No listener or state model | Use a separate UDP listener |
 | Video | `streamon` / `streamoff` wire strings | No video receiver or decoder |
-| Command chain | `CommandExecutor` and `Reference<T>` types exist | Tail and parameter paths have known defects |
+| Command chain | `CommandExecutor` and `Reference<T>` | Needs `createConnection()` before `run()`; one shared static connection |
 
-## Measured results
+## Results
 
-The commands and scripts behind these values are documented in
-[`docs/measurement.md`](docs/measurement.md).
+These values come from `tools/linux-run.sh`, which builds the library and runs
+the scripts in a Linux container. See [`docs/measurement.md`](docs/measurement.md).
 
 | Check | Result |
 |---|---:|
 | `mvn -B -q clean package` | exit `0` |
-| Java sources under `src/main/java` | `14` files, `512` lines, `13,186` bytes |
-| Build output | `16` class files; jar `15,856` bytes |
+| Java sources under `src/main/java` | `14` files, `514` lines, `13,272` bytes |
+| Build output | `16` class files; jar `15,749` bytes |
 | `CommandStrings` entries parsed | `18` |
-| Local UDP-stub probe | `13/13` checks passed |
-| No-reply receive probe | still blocked after `5,004` ms in the captured run |
-| Java compiler reported by inventory | `javac 21.0.2` |
+| Local UDP-stub probe | `14/14` checks passed |
+| No-reply receive probe | still blocked after `5,002` ms (open bug 3) |
+| Java compiler | `javac 11.0.32` (Temurin, Linux aarch64) |
 
 The probe uses synthetic localhost replies such as `ok`, `error`, and
 `stub-reply`. It does not measure flight, radio range, telemetry, battery,
@@ -157,7 +157,7 @@ src/main/java/ch/bissbert/
 ├── command/creator/             command execution and references
 └── connection/                  UDP transport, drone, controllers
 docs/                            subsystem write-ups and measurement method
-tools/                           source inventory, table generator, local probe
+tools/                           inventory, table generator, local probe, Linux run
 ```
 
 Start with [`docs/README.md`](docs/README.md) for the write-ups. The command
@@ -168,28 +168,19 @@ table in [`docs/protocol.md`](docs/protocol.md) is emitted by
 
 - The repository has no telemetry listener, telemetry parser, video receiver,
   or frame decoder.
-- `Connection.fetchDataByte()` blocks on `DatagramSocket.receive()` and never
-  configures a socket timeout. A missing reply can therefore park the caller.
-  A finite timeout would be a public behavior change — the default value and
-  the caller contract for `SocketTimeoutException` both have to be chosen — so
-  none was introduced.
-- A failed `Connection` setup is printed and then followed by `connect()`, so
-  an invalid host or socket setup can fail again through a null field. Fixing
-  this needs an API decision — whether an initialization failure should surface
-  as a checked or an unchecked exception — so the constructor is unchanged.
+- Open bug 3: `Connection.fetchDataByte()` blocks on `DatagramSocket.receive()`
+  with no socket timeout, so a missing reply parks the caller. The fix needs a
+  choice of default timeout and of how `SocketTimeoutException` reaches callers.
+- Open bug 5: a failed `Connection` setup is printed and then followed by
+  `connect()`, so an unresolvable host ends in `NullPointerException`. The fix
+  needs a choice between a checked and an unchecked setup exception.
 - `Drone` has no constructor for a custom host or port. Tests and alternate
   Tello network layouts must use `Connection` directly.
-- No flight program was run against a real aircraft in this pass. The diagrams
-  are protocol documentation, not a flight recording.
+- No flight program was run against a real aircraft. The diagrams are protocol
+  documentation, not a flight recording.
 
-Three further defects recorded during this pass have since been fixed on the
-default branch: `ComplexCommand.parameters` was never initialized, so
-`addParam()` failed before a complex command could be composed;
-`CommandExecutor.run()` called `after.run()` even for a final command with no
-successor; and a send after `close()` reached the socket instead of taking the
-library's `NoConnectionException` path. Each command now gets its own parameter
-list, a terminal executor skips the missing successor, and `sendCommand()`
-requires a socket that is both connected and not closed. See
+Three earlier bugs are fixed: `ComplexCommand` parameters, the null successor
+at the end of an executor chain, and the send-after-close guard. See
 [`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md).
 
 [sdk]: https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf

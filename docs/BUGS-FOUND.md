@@ -2,54 +2,49 @@
 
 # Bugs found
 
-This file records defects found while documenting the source as it stood. None
-of the fixes below were applied during the documentation pass itself. The line
-numbers refer to the source inspected for this pass.
+Each entry below was confirmed by reading the source and, where possible,
+reproduced with `tools/protocol_probe.py` in a Linux container (see
+[How this was measured](measurement.md)). Three are fixed on `main`. Two are
+still open because each fix needs a public API decision.
 
-> **Since this pass:** an independent adjudication confirmed all five entries.
-> A subsequent fix pass applied three of them to the default branch: the
-> uninitialized `ComplexCommand.parameters` in commit `42c9dff`, the terminal
-> executor's null successor in commit `35081a4`, and the closed-socket guard in
-> commit `8970c18`. Two were deferred because each needs a public API decision
-> rather than a patch — the missing receive timeout (the default value and the
-> caller contract for `SocketTimeoutException` have to be chosen) and the
-> constructor that continues after a setup failure (whether the failure should
-> be checked or unchecked). Read the reproductions and diffs below as the state
-> at the time of the pass, not as the current state of the default branch.
+| # | Entry | Status |
+|---|---|---|
+| 1 | `ComplexCommand.parameters` is never initialized | Fixed in [`42c9dff`](https://github.com/Bissbert/Tello4J/commit/42c9dff) |
+| 2 | A terminal `CommandExecutor` calls a null successor | Fixed in [`35081a4`](https://github.com/Bissbert/Tello4J/commit/35081a4) |
+| 3 | A missing reply blocks forever | Open |
+| 4 | The closed-socket guard checks the wrong condition | Fixed in [`8970c18`](https://github.com/Bissbert/Tello4J/commit/8970c18) |
+| 5 | Constructor setup failure is caught, then dereferenced | Open |
 
-## `ComplexCommand.parameters` is never initialized
+## 1. `ComplexCommand.parameters` is never initialized
 
-**File and line:** `src/main/java/ch/bissbert/command/model/ComplexCommand.java:11`
+**Status:** fixed in [`42c9dff`](https://github.com/Bissbert/Tello4J/commit/42c9dff).
 
-**What happens:** `addParam()` calls `parameters.add(param)` while
-`parameters` is null. `compose()` has the same problem when it evaluates
-`parameters.size()`.
+**File:** `src/main/java/ch/bissbert/command/model/ComplexCommand.java:11`
 
-**How to reproduce:** Build the project, then run
-`python3 tools/protocol_probe.py`. The `ComplexCommand.addParam()` check reports
-`NullPointerException` for `addParam(20)`.
+**What happened:** `parameters` was declared but never assigned, so
+`addParam()` and `compose()` threw `NullPointerException`.
 
-**Fix I would have made:** initialize the collection when the command is
-constructed.
+**What changed:** each command now gets its own list:
 
 ```diff
 -    LinkedList<Object> parameters;
 +    LinkedList<Object> parameters = new LinkedList<>();
 ```
 
-## A terminal `CommandExecutor` always calls a null successor
+**Check:** the probe's `complex-addparam` line reads
+`addParam(20), compose() = "forward 20"`.
 
-**File and line:** `src/main/java/ch/bissbert/command/creator/CommandExecutor.java:59`
+## 2. A terminal `CommandExecutor` calls a null successor
 
-**What happens:** `run()` sends or reads its own command, then unconditionally
-calls `after.run()`. A command with no `andThen()` successor therefore throws
+**Status:** fixed in [`35081a4`](https://github.com/Bissbert/Tello4J/commit/35081a4).
+
+**File:** `src/main/java/ch/bissbert/command/creator/CommandExecutor.java:59`
+
+**What happened:** `run()` sent or read its own command and then always called
+`after.run()`. The last executor in a chain has no successor, so it threw
 `NullPointerException` after its own operation.
 
-**How to reproduce:** Build the project, then run
-`python3 tools/protocol_probe.py`. The `executor-chain-tail` check reports that
-the command was sent and the tail then threw `NullPointerException`.
-
-**Fix I would have made:** treat a missing successor as the end of the chain.
+**What changed:** the successor is called only when it exists:
 
 ```diff
 -        after.run();
@@ -58,70 +53,73 @@ the command was sent and the tail then threw `NullPointerException`.
 +        }
 ```
 
-## A missing reply blocks forever
+**Check:** the probe's `executor-chain-tail` line reads
+`run() sent the command and returned`, and the stub receives the `command`
+datagram.
 
-**File and line:** `src/main/java/ch/bissbert/connection/Connection.java:59`
+## 3. A missing reply blocks forever
 
-**What happens:** `fetchDataByte()` calls `DatagramSocket.receive()` without
-configuring `SO_TIMEOUT`. A command whose peer never replies leaves the caller
-blocked.
+**Status:** open. A finite timeout is a public behaviour change: the default
+value and the caller contract for `SocketTimeoutException` both have to be
+chosen, and retries of movement commands must not be added implicitly.
 
-**How to reproduce:** Build the project, then run
-`python3 tools/protocol_probe.py`. Its local stub deliberately stays silent for
-`stay-silent`; the probe reports that the receive thread is still blocked after
-`5004` milliseconds.
+**File:** `src/main/java/ch/bissbert/connection/Connection.java:59`
 
-**Fix I would have made:** configure a documented, caller-selectable receive
-timeout before waiting for the datagram and surface `SocketTimeoutException`.
+**What happens:** `fetchDataByte()` calls `DatagramSocket.receive()` and no
+code sets `SO_TIMEOUT`. If the peer never replies, the caller stays blocked.
 
-```diff
--        socket.receive(answerPacket);
-+        socket.setSoTimeout(RECEIVE_TIMEOUT_MILLIS);
-+        socket.receive(answerPacket);
+**Reproduce:** the probe's stub never answers `stay-silent`:
+
+```
+fetchDataString() never times out when nothing replies       PASS  fetchDataString() still blocked after 5002 ms with no reply
 ```
 
-## The closed-socket guard checks the wrong condition
+**Possible fix:** a caller-selectable receive timeout, set before
+`receive()`, with `SocketTimeoutException` passed to the caller.
 
-**File and line:** `src/main/java/ch/bissbert/connection/Connection.java:45`
+## 4. The closed-socket guard checks the wrong condition
 
-**What happens:** `sendCommand()` checks `socket.isConnected()`, but a
-`DatagramSocket` can remain connected after `close()`. A later send therefore
-passes the guard and throws the socket's `SocketException` instead of the
-library's `NoConnectionException` path.
+**Status:** fixed in [`8970c18`](https://github.com/Bissbert/Tello4J/commit/8970c18).
 
-**How to reproduce:** Build the project, then run
-`python3 tools/protocol_probe.py`. The `send-after-close` check closes a
-connection and observes `java.net.SocketException: Socket closed` on the next
-send.
+**File:** `src/main/java/ch/bissbert/connection/Connection.java:45`
 
-**Fix I would have made:** include the closed state in the guard.
+**What happened:** `sendCommand()` checked only `socket.isConnected()`, which
+stays true after `close()`. A send after `close()` threw the socket's
+`SocketException: Socket closed` instead of the library's
+`NoConnectionException`.
+
+**What changed:**
 
 ```diff
 -        if (socket.isConnected()) {
 +        if (socket.isConnected() && !socket.isClosed()) {
 ```
 
-## Constructor setup failure is caught, then dereferenced
+**Check:** the probe's `send-after-close` line reads
+`threw ch.bissbert.connection.exception.NoConnectionException`.
 
-**Files and lines:** `src/main/java/ch/bissbert/connection/Connection.java:22-30`
+## 5. Constructor setup failure is caught, then dereferenced
+
+**Status:** open. The fix needs a decision on whether a setup failure is a
+checked or an unchecked exception, which changes the constructor's contract.
+
+**File:** `src/main/java/ch/bissbert/connection/Connection.java:20-31`
 
 **What happens:** the constructor catches `UnknownHostException` or
-`SocketException`, prints the stack trace, and then calls `connect()` anyway.
-If address or socket creation failed, `connect()` dereferences the null field
-instead of returning a clear construction failure.
+`SocketException`, prints the stack trace, and calls `connect()` anyway. If
+the host did not resolve, `socket` is still null and `connect()` throws
+`NullPointerException`.
 
-**How to reproduce:** Construct `new Connection("does-not-exist.invalid", 8889)`
-with a host that cannot be resolved, or run in an environment where the
-datagram socket cannot be created.
-The catch block is followed unconditionally by `this.connect()` in the source.
-This path was not exercised by the localhost probe.
+**Reproduce:** the probe constructs `new Connection("does-not-exist.invalid", port)`:
 
-**Fix I would have made:** make construction fail explicitly and only connect
-after both required fields were created.
+```
+unresolvable host: constructor throws NPE                    PASS  constructor threw java.lang.NullPointerException
+```
+
+**Possible fix:** connect inside the `try`, and throw with the original cause:
 
 ```diff
--        try {
-+        try {
+         try {
              this.address = InetAddress.getByName(host);
              this.socket = new DatagramSocket();
 -        } catch (UnknownHostException e) {

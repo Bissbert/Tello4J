@@ -2,12 +2,30 @@
 
 # How this was measured
 
-Every measured number in the overview comes from a command run in this repository or
-from a value printed by the source-driven scripts. The scripts are Python
-standard-library programs; the protocol probe also compiles a small Java
-driver against the already-built library.
+Every number in the overview comes from one script run in a Linux container:
 
-No real drone run was possible here, so this pass ships diagrams only and no generated media.
+```sh
+sh tools/linux-run.sh > media/captures/linux-run.txt
+```
+
+[`tools/linux-run.sh`](../tools/linux-run.sh) starts
+`maven:3.9-eclipse-temurin-11`, mounts the repository read-only, copies it,
+builds it with Maven, and runs the three scripts in [`tools/`](../tools). The
+full output is [`media/captures/linux-run.txt`](../media/captures/linux-run.txt);
+every value below is taken from it.
+
+No Tello aircraft was used. The protocol probe talks to a UDP stub on
+`127.0.0.1` that sends synthetic replies.
+
+## Environment
+
+| | |
+|---|---|
+| Kernel | Linux 6.5.11-linuxkit, aarch64 (Docker Desktop VM) |
+| Image | `maven:3.9-eclipse-temurin-11` (`sha256:72b9e4bb…a5d3d7`) |
+| Java | OpenJDK 11.0.32, Maven 3.9.16 |
+| Python | 3.12.3 |
+| Date | 2026-09-24 |
 
 ## Measurement flow
 
@@ -29,73 +47,63 @@ flowchart LR
     style B fill:#238636,stroke:#3fb950,color:#fff
 ```
 
-## Commands run
+## Build
 
-### Build
+`mvn -B -q clean package` exits `0`.
 
-```sh
-mvn -B -q clean package
-```
+## Inventory
 
-This completed with exit code `0`. It produced the Maven output inspected by
-`tools/inventory.py`.
+`tools/inventory.py` walks `src/main/java/ch/bissbert/`, counts source lines and
+bytes, then counts the class files and the jar:
 
-### Inventory
-
-```sh
-python3 tools/inventory.py
-```
-
-The script walks `src/main/java/ch/bissbert/`, counts UTF-8 source bytes and
-newline-delimited lines, then counts `.class` files and jar bytes when
-`target/classes` exists. Its captured output reported:
-
-| Value | Captured result |
+| Value | Result |
 |---|---:|
 | Java source files | `14` |
-| Source lines | `512` |
-| Source bytes | `13,186` |
+| Source lines | `514` |
+| Source bytes | `13,272` |
 | `.class` files | `16` |
-| Built jar bytes | `15,856` |
-| `javac` | `21.0.2` |
+| `target/tello4j-1.0-SNAPSHOT.jar` | `15,749` bytes |
+| `javac` | `11.0.32` |
 
-### Command table
+## Command table
 
-```sh
-python3 tools/command_table.py
-```
+`tools/command_table.py` parses `18` enum constants from `CommandStrings.java`.
+The table is copied into [`protocol.md`](protocol.md); rerunning the script
+shows any drift between that table and the enum.
 
-The parser found `18` enum constants in `CommandStrings.java`. The resulting
-table is copied into [`protocol.md`](protocol.md); rerunning the script is the
-way to detect drift between that table and the enum.
+## Local protocol probe
 
-### Local protocol probe
+`tools/protocol_probe.py` opens a UDP socket on `127.0.0.1`, compiles
+[`ProtocolProbe.java`](../tools/ProtocolProbe.java) against the built classes,
+and answers selected command strings with `ok`, `error` or `stub-reply`. It
+reports each check as `PASS` when the library behaves as the check describes:
 
-```sh
-python3 tools/protocol_probe.py
-```
+| Check | Observed |
+|---|---|
+| `Connection(host, port)` constructs and connects | built |
+| `sendCommand()` emits the bare command as one datagram | sent `"command"` |
+| `"ok"` reply maps to `sendCommandAndFetchStatus() == true` | `true` |
+| any other reply maps to `false` | `false` |
+| a read command returns the reply payload verbatim | `"stub-reply"`, length 10 |
+| `BasicCommand("up").compose()` | `"up"` |
+| `BasicCommand(CommandStrings.TAKE_OFF).compose()` | `"takeoff"` |
+| `BasicCommand(CommandStrings.SET_WIFI).compose()` | `"wifi ssid"` |
+| `ComplexCommand.addParam(20)`, then `compose()` | `"forward 20"` |
+| `CommandExecutor.run()` without `createConnection()` | `NullPointerException` |
+| `CommandExecutor.run()` at the end of a chain | sent the command and returned |
+| `sendCommand()` after `close()` | `NoConnectionException` |
+| `Connection("does-not-exist.invalid", …)` | `NullPointerException` ([bug 5](BUGS-FOUND.md)) |
+| `fetchDataString()` with no reply | still blocked after `5,002` ms ([bug 3](BUGS-FOUND.md)) |
 
-This starts a UDP socket on `127.0.0.1`, compiles
-[`ProtocolProbe.java`](../tools/ProtocolProbe.java), and returns synthetic
-replies for selected command strings. It exercises construction, raw datagram
-sends, status mapping, payload reads, command composition, executor failure
-paths, post-close behavior, and the missing-reply behavior.
+All `14/14` checks pass. The stub received `command`, `takeoff`,
+`provoke-error`, `battery?`, `command` and `stay-silent`, in that order. The
+5-second figure is only the probe's wait budget; it shows that no receive
+timeout is set, not how long a real aircraft takes to reply.
 
-The captured run passed `13/13` checks. The no-reply thread was still blocked
-after `5,004` ms. That is evidence about this local build and the source's
-missing `SO_TIMEOUT`; it is not a measurement of aircraft latency or radio
-reliability. The stub's `stub-reply` payload is synthetic and is never
-presented as telemetry.
+## Not covered
 
-The probe's received datagrams were the source literals `command`, `takeoff`,
-`provoke-error`, `battery?`, `command`, and `stay-silent`. No aircraft was
-contacted.
-
-## What was not measured
-
-- No Tello aircraft, battery, motors, Wi-Fi link, telemetry stream, or video
-  stream was available.
-- No flight duration, movement accuracy, response latency, packet loss, or
-  safety behavior is claimed.
+- No Tello aircraft, battery, motors, Wi-Fi link, telemetry stream or video
+  stream.
+- No flight duration, movement accuracy, response latency or packet loss.
 - The quick-start flight class was not run.
-- The diagrams describe source and SDK flow; they are not captured recordings.
+- The diagrams describe the source and the SDK flow; they are not recordings.
