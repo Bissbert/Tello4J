@@ -13,7 +13,6 @@ localhost probe.
 | Command model and execution | `Command`, `BasicCommand`, `ComplexCommand`, `CommandExecutor`, `Reference` | [`commands.md`](commands.md) |
 | SDK command vocabulary | `CommandStrings` and the wire sequence | [`protocol.md`](protocol.md) |
 | Measurement method | Linux build, inventory, command table, local UDP probe | [`measurement.md`](measurement.md) |
-| Bugs found | six defects, all fixed | [`BUGS-FOUND.md`](BUGS-FOUND.md) |
 
 The code has no telemetry or video consumer. The protocol diagrams therefore
 show those streams as external responsibilities rather than pretending that

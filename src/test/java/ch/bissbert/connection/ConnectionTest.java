@@ -112,7 +112,7 @@ class ConnectionTest {
         assertThrows(NoConnectionException.class, () -> c.sendCommand("land"));
     }
 
-    // Bug 3 / issue #5: a missing reply used to block forever.
+    // Issue #5: a missing reply used to block forever.
 
     @Test
     void missingReplyTimesOut() {
@@ -178,7 +178,7 @@ class ConnectionTest {
         }
     }
 
-    // Bug 5 / issue #6: a setup failure used to be printed, then dereferenced.
+    // Issue #6: a setup failure used to be printed, then dereferenced.
 
     @Test
     void unresolvableHostThrowsWithTheCause() {

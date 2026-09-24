@@ -104,10 +104,10 @@ reports each check as `PASS` when the library behaves as the check describes:
 | `ComplexCommand.addParam(20)`, then `compose()` | `"forward 20"` |
 | `CommandExecutor.run()` without `createConnection()` | `NullPointerException` |
 | `CommandExecutor.run()` at the end of a chain | sent the command and returned |
-| `execute("forward").withParam(20).run()` | returned; stub received `forward 20` ([bug 6](BUGS-FOUND.md)) |
+| `execute("forward").withParam(20).run()` | returned; stub received `forward 20` ([#7](https://github.com/Bissbert/Tello4J/issues/7)) |
 | `sendCommand()` after `close()` | `NoConnectionException` |
-| `Connection("does-not-exist.invalid", …)` | `UncheckedIOException`, cause `UnknownHostException` ([bug 5](BUGS-FOUND.md)) |
-| `fetchDataString()` with no reply, 500 ms timeout | `SocketTimeoutException` after `512` ms ([bug 3](BUGS-FOUND.md)) |
+| `Connection("does-not-exist.invalid", …)` | `UncheckedIOException`, cause `UnknownHostException` ([#6](https://github.com/Bissbert/Tello4J/issues/6)) |
+| `fetchDataString()` with no reply, 500 ms timeout | `SocketTimeoutException` after `512` ms ([#5](https://github.com/Bissbert/Tello4J/issues/5)) |
 
 All `15/15` checks pass. The stub received `command`, `takeoff`,
 `provoke-error`, `battery?`, `command`, `forward 20` and `stay-silent`, in that

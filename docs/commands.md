@@ -29,8 +29,8 @@ flowchart LR
 `AbstractCommand` stores the wire text and a boolean read flag. `BasicCommand`
 returns that text unchanged. `ComplexCommand` appends its parameters
 with spaces: after `addParam(20)`, a `forward` command composes to
-`forward 20`. Each command has its own parameter list (fixed in `42c9dff`;
-see [Bugs found](BUGS-FOUND.md)). `addParam(null)` logs a warning and adds
+`forward 20`. Each command has its own parameter list (fixed in
+[`42c9dff`](https://github.com/Bissbert/Tello4J/commit/42c9dff)). `addParam(null)` logs a warning and adds
 nothing.
 
 ## `CommandExecutor`
@@ -70,8 +70,7 @@ sequenceDiagram
 stops after its own send or read (fixed in `35081a4`). `run()` does not create
 a connection: without `createConnection()` it throws `NullPointerException`.
 All executor instances share one static connection. An executor with
-parameters keeps the successor and read target set before `withParam()` (bug 6
-in [Bugs found](BUGS-FOUND.md), fixed).
+parameters keeps the successor and read target set before `withParam()` ([#7](https://github.com/Bissbert/Tello4J/issues/7)).
 For predictable behavior, the direct `Connection` API is easier to audit.
 
 ## Class responsibilities

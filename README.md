@@ -187,8 +187,4 @@ table in [`docs/protocol.md`](docs/protocol.md) is emitted by
 - No flight program was run against a real aircraft. The diagrams are protocol
   documentation, not a flight recording.
 
-Three earlier bugs are fixed: `ComplexCommand` parameters, the null successor
-at the end of an executor chain, and the send-after-close guard. See
-[`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md).
-
 [sdk]: https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf

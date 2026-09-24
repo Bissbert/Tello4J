@@ -28,7 +28,7 @@ This is an implementation state model, not a state machine maintained by the
 library. There is no public `ConnectionState` value. If the host does not
 resolve or the socket cannot be opened, the constructor throws
 `UncheckedIOException` with the `UnknownHostException` or `SocketException` as
-its cause (bug 5 in [Bugs found](BUGS-FOUND.md), fixed).
+its cause ([#6](https://github.com/Bissbert/Tello4J/issues/6)).
 
 The constructor also sets the socket's receive timeout: 15 seconds
 (`DEFAULT_RECEIVE_TIMEOUT_MS`) with `Connection(host, port)`, or the value
