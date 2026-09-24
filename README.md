@@ -38,10 +38,17 @@ sequenceDiagram
 Build the library from the repository root:
 
 ```sh
-mvn -B -q clean package
+mvn -B clean package
 ```
 
-This build runs in the Linux container used for the
+The build also runs the JUnit suite. To run only the tests in a Linux
+container, with no JDK on the host:
+
+```sh
+sh tools/docker-test.sh
+```
+
+The tests use a fake drone on `127.0.0.1`; no aircraft is needed. This build runs in the Linux container used for the
 [measurements](docs/measurement.md). To fly, put the built jar and its Log4j dependency on your application's
 classpath, then use the smallest direct API path:
 
@@ -124,7 +131,7 @@ received UTF-8 payload instead.
 | SDK mode | `command` via controller or direct send | No automatic handshake |
 | Control commands | Enum values for takeoff, land, stream, emergency | Caller sequences and checks replies |
 | Movement commands | Enum values and arbitrary command parameters | No range or arity validation |
-| Read commands | `sendCommandAndFetchData()` and status helper | One blocking receive, no timeout |
+| Read commands | `sendCommandAndFetchData()` and status helper | One receive, 15 s timeout by default (`SocketTimeoutException`, no retry) |
 | Telemetry | No listener or state model | Use a separate UDP listener |
 | Video | `streamon` / `streamoff` wire strings | No video receiver or decoder |
 | Command chain | `CommandExecutor` and `Reference<T>` | Needs `createConnection()` before `run()`; one shared static connection |
@@ -136,12 +143,13 @@ the scripts in a Linux container. See [`docs/measurement.md`](docs/measurement.m
 
 | Check | Result |
 |---|---:|
-| `mvn -B -q clean package` | exit `0` |
-| Java sources under `src/main/java` | `14` files, `514` lines, `13,272` bytes |
-| Build output | `16` class files; jar `15,749` bytes |
+| `mvn -B clean package` | exit `0` |
+| JUnit tests | `39` run, `0` failures, `0` errors |
+| Java sources under `src/main/java` | `14` files, `553` lines, `14,876` bytes |
+| Build output | `16` class files; jar `16,243` bytes |
 | `CommandStrings` entries parsed | `18` |
-| Local UDP-stub probe | `14/14` checks passed |
-| No-reply receive probe | still blocked after `5,002` ms (open bug 3) |
+| Local UDP-stub probe | `15/15` checks passed |
+| No-reply receive probe | `SocketTimeoutException` after `512` ms with a `500` ms timeout |
 | Java compiler | `javac 11.0.32` (Temurin, Linux aarch64) |
 
 The probe uses synthetic localhost replies such as `ok`, `error`, and
@@ -168,19 +176,15 @@ table in [`docs/protocol.md`](docs/protocol.md) is emitted by
 
 - The repository has no telemetry listener, telemetry parser, video receiver,
   or frame decoder.
-- Open bug 3: `Connection.fetchDataByte()` blocks on `DatagramSocket.receive()`
-  with no socket timeout, so a missing reply parks the caller. The fix needs a
-  choice of default timeout and of how `SocketTimeoutException` reaches callers.
-- Open bug 5: a failed `Connection` setup is printed and then followed by
-  `connect()`, so an unresolvable host ends in `NullPointerException`. The fix
-  needs a choice between a checked and an unchecked setup exception.
+- A read waits 15 seconds for a reply by default, then throws
+  `SocketTimeoutException`. Nothing is retried. Choose another value with
+  `new Connection(host, port, timeoutMs)` or `setReceiveTimeout()`; `Drone`
+  uses the default.
+- A failed `Connection` setup throws `UncheckedIOException` with the original
+  `UnknownHostException` or `SocketException` as its cause.
 - `Drone` has no constructor for a custom host or port. Tests and alternate
   Tello network layouts must use `Connection` directly.
 - No flight program was run against a real aircraft. The diagrams are protocol
   documentation, not a flight recording.
-
-Three earlier bugs are fixed: `ComplexCommand` parameters, the null successor
-at the end of an executor chain, and the send-after-close guard. See
-[`docs/BUGS-FOUND.md`](docs/BUGS-FOUND.md).
 
 [sdk]: https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf

@@ -32,13 +32,12 @@ public class ProtocolProbe {
         complexCommandAddParam();
         executorRunWithoutConnection();
         executorChainTail();
+        executorWithParam();
         sendAfterClose();
         constructorBadHost();
-        receiveHasNoTimeout();
+        receiveTimesOut();
 
         System.out.flush();
-        // A probe thread is still parked in receive(); do not wait for it.
-        Runtime.getRuntime().halt(0);
     }
 
     private static void check(String id, boolean pass, String detail) {
@@ -153,6 +152,21 @@ public class ProtocolProbe {
         }
     }
 
+    /** An executor with a parameter sends "word param" (fixed for #7). */
+    private static void executorWithParam() {
+        Connection c = new Connection(HOST, port);
+        CommandExecutor.connection = c;
+        try {
+            CommandExecutor.execute("forward").withParam(20).run();
+            check("executor-with-param", true, "execute(\"forward\").withParam(20).run() returned normally");
+        } catch (Throwable t) {
+            check("executor-with-param", false, "run() threw " + t.getClass().getName());
+        } finally {
+            CommandExecutor.connection = null;
+            c.close();
+        }
+    }
+
     /** The guard also checks isClosed() (fixed in 8970c18). */
     private static void sendAfterClose() {
         Connection c = new Connection(HOST, port);
@@ -166,35 +180,34 @@ public class ProtocolProbe {
         }
     }
 
-    /** The constructor prints a setup failure, then calls connect() anyway (open). */
+    /** A setup failure is thrown with its cause (fixed for #6). */
     private static void constructorBadHost() {
         try (Connection c = new Connection("does-not-exist.invalid", port)) {
             check("construct-bad-host", false, "constructor returned normally");
+        } catch (java.io.UncheckedIOException e) {
+            check("construct-bad-host", e.getCause() instanceof java.net.UnknownHostException,
+                    "constructor threw UncheckedIOException, cause " + e.getCause().getClass().getName());
         } catch (Throwable t) {
-            check("construct-bad-host", t instanceof NullPointerException,
-                    "constructor threw " + t.getClass().getName());
+            check("construct-bad-host", false, "constructor threw " + t.getClass().getName());
         }
     }
 
-    /** No SO_TIMEOUT is ever set, so receive() parks forever when nothing replies. */
-    private static void receiveHasNoTimeout() throws Exception {
-        final Connection c = new Connection(HOST, port);
-        final long budgetMs = 5000;
-        Thread t = new Thread(() -> {
+    /** A read with no reply ends with SocketTimeoutException (fixed for #5). */
+    private static void receiveTimesOut() {
+        final int timeoutMs = 500;
+        try (Connection c = new Connection(HOST, port, timeoutMs)) {
+            long t0 = System.nanoTime();
             try {
                 c.sendCommandAndFetchData("stay-silent");
-            } catch (Throwable ignored) {
-                // the probe exits via halt() while this thread is parked
+                check("receive-timeout", false, "fetchDataString() returned a reply");
+            } catch (java.net.SocketTimeoutException e) {
+                long waitedMs = (System.nanoTime() - t0) / 1_000_000;
+                check("receive-timeout", true,
+                        "SocketTimeoutException after " + waitedMs + " ms (timeout " + timeoutMs + " ms)");
             }
-        });
-        t.setDaemon(true);
-        long t0 = System.nanoTime();
-        t.start();
-        t.join(budgetMs);
-        long waitedMs = (System.nanoTime() - t0) / 1_000_000;
-        boolean stillBlocked = t.isAlive();
-        check("no-so-timeout", stillBlocked,
-                "fetchDataString() still blocked after " + waitedMs + " ms with no reply");
+        } catch (Exception e) {
+            check("receive-timeout", false, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
     }
 
     private static String quote(String s) {

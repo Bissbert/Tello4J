@@ -73,7 +73,7 @@ flowchart TD
     B --> C{"Reply received?"}
     C -->|"ok"| D["Continue"]
     C -->|"error or other text"| E["Handle rejection"]
-    C -->|"no reply"| F["Tello4J blocks"]
+    C -->|"no reply"| F["SocketTimeoutException after the receive timeout"]
     D --> G["Send next command"]
     G --> B
 
@@ -83,7 +83,8 @@ flowchart TD
 ```
 
 Tello4J does not automatically send `command`, retry a rejected instruction,
-apply a safety interlock, or stop after a missing reply. A flight program must
+or apply a safety interlock. After a missing reply it throws
+`SocketTimeoutException` and leaves the next step to the caller. A flight program must
 make those decisions explicitly.
 
 [sdk]: https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf

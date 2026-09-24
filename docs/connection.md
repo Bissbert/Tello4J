@@ -15,21 +15,27 @@ stateDiagram-v2
     [*] --> Constructing
     Constructing --> Connected: resolve host, create socket, connect
     Constructing --> SetupFailure: lookup or socket setup throws
-    SetupFailure --> [*]: prints stack trace, then connect() throws NullPointerException
+    SetupFailure --> [*]: throws UncheckedIOException with the cause
     Connected --> Connected: send command datagram
     Connected --> Waiting: receive reply
     Waiting --> Connected: reply datagram arrives
-    Waiting --> Waiting: no socket timeout; caller blocks
+    Waiting --> Connected: timeout expires; SocketTimeoutException
     Connected --> Closed: close()
     Closed --> Closed: later send throws NoConnectionException
 ```
 
 This is an implementation state model, not a state machine maintained by the
-library. There is no public `ConnectionState` value. In particular, the
-constructor catches `UnknownHostException` and `SocketException`, prints the
-stack trace, and then calls its private `connect()` method. With an unresolvable
-host the socket is still null, so construction ends in `NullPointerException`
-(open bug 5 in [Bugs found](BUGS-FOUND.md)).
+library. There is no public `ConnectionState` value. If the host does not
+resolve or the socket cannot be opened, the constructor throws
+`UncheckedIOException` with the `UnknownHostException` or `SocketException` as
+its cause ([#6](https://github.com/Bissbert/Tello4J/issues/6)).
+
+The constructor also sets the socket's receive timeout: 15 seconds
+(`DEFAULT_RECEIVE_TIMEOUT_MS`) with `Connection(host, port)`, or the value
+passed to `Connection(host, port, receiveTimeoutMs)`. `0` waits forever.
+`setReceiveTimeout()` changes it later. A read that runs out of time throws
+`SocketTimeoutException` and the connection stays usable. The command is not
+sent again.
 
 ## What `Connection` puts on the wire
 
@@ -87,10 +93,10 @@ side. It has no UDP server for state packets and no video receiver.
 
 | Boundary | What the source does |
 |---|---|
-| Missing reply | Blocks in `DatagramSocket.receive()` because no timeout is set (open bug 3) |
+| Missing reply | `SocketTimeoutException` after the receive timeout, 15 s by default; no retry |
 | Closed socket | `close()` closes the socket; a later send throws `NoConnectionException` |
 | Failed command | Status helper returns `false` for any reply other than `ok` |
-| Failed setup | Constructor prints the caught exception, then `connect()` throws `NullPointerException` (open bug 5) |
+| Failed setup | Constructor throws `UncheckedIOException` with the original cause |
 | Custom endpoint | Use `Connection(host, port)`; `Drone` has only its fixed defaults |
 | Telemetry | Not bound, decoded, stored, or exposed |
 

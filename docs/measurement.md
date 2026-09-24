@@ -10,7 +10,7 @@ sh tools/linux-run.sh > media/captures/linux-run.txt
 
 [`tools/linux-run.sh`](../tools/linux-run.sh) starts
 `maven:3.9-eclipse-temurin-11`, mounts the repository read-only, copies it,
-builds it with Maven, and runs the three scripts in [`tools/`](../tools). The
+builds it with Maven (which runs the JUnit suite), and runs the three scripts in [`tools/`](../tools). The
 full output is [`media/captures/linux-run.txt`](../media/captures/linux-run.txt);
 every value below is taken from it.
 
@@ -31,7 +31,7 @@ No Tello aircraft was used. The protocol probe talks to a UDP stub on
 
 ```mermaid
 flowchart LR
-    M["mvn -B -q clean package"] --> I["tools/inventory.py"]
+    M["mvn -B clean package"] --> I["tools/inventory.py"]
     S["CommandStrings.java"] --> T["tools/command_table.py"]
     P["tools/protocol_probe.py"] --> J["tools/ProtocolProbe.java"]
     J --> U["localhost UDP stub"]
@@ -49,7 +49,20 @@ flowchart LR
 
 ## Build
 
-`mvn -B -q clean package` exits `0`.
+`mvn -B clean package` exits `0`. It runs the JUnit suite in `src/test/java`:
+
+| Test class | Tests | Failures | Errors |
+|---|---:|---:|---:|
+| `ConnectionTest` | `19` | `0` | `0` |
+| `CommandModelTest` | `10` | `0` | `0` |
+| `CommandExecutorTest` | `10` | `0` | `0` |
+| **total** | **`39`** | **`0`** | **`0`** |
+
+The tests talk to a fake drone, a UDP socket on `127.0.0.1` that replies,
+stays silent, or records what it received. `sh tools/docker-test.sh` runs only
+the suite, in the same image. Each of bugs 3, 5 and 6 was also revert-checked
+with that script, outside this capture: with the fix undone, 6, 2 and 5 tests
+fail.
 
 ## Inventory
 
@@ -59,10 +72,10 @@ bytes, then counts the class files and the jar:
 | Value | Result |
 |---|---:|
 | Java source files | `14` |
-| Source lines | `514` |
-| Source bytes | `13,272` |
+| Source lines | `553` |
+| Source bytes | `14,876` |
 | `.class` files | `16` |
-| `target/tello4j-1.0-SNAPSHOT.jar` | `15,749` bytes |
+| `target/tello4j-1.0-SNAPSHOT.jar` | `16,243` bytes |
 | `javac` | `11.0.32` |
 
 ## Command table
@@ -91,14 +104,15 @@ reports each check as `PASS` when the library behaves as the check describes:
 | `ComplexCommand.addParam(20)`, then `compose()` | `"forward 20"` |
 | `CommandExecutor.run()` without `createConnection()` | `NullPointerException` |
 | `CommandExecutor.run()` at the end of a chain | sent the command and returned |
+| `execute("forward").withParam(20).run()` | returned; stub received `forward 20` ([#7](https://github.com/Bissbert/Tello4J/issues/7)) |
 | `sendCommand()` after `close()` | `NoConnectionException` |
-| `Connection("does-not-exist.invalid", …)` | `NullPointerException` ([bug 5](BUGS-FOUND.md)) |
-| `fetchDataString()` with no reply | still blocked after `5,002` ms ([bug 3](BUGS-FOUND.md)) |
+| `Connection("does-not-exist.invalid", …)` | `UncheckedIOException`, cause `UnknownHostException` ([#6](https://github.com/Bissbert/Tello4J/issues/6)) |
+| `fetchDataString()` with no reply, 500 ms timeout | `SocketTimeoutException` after `512` ms ([#5](https://github.com/Bissbert/Tello4J/issues/5)) |
 
-All `14/14` checks pass. The stub received `command`, `takeoff`,
-`provoke-error`, `battery?`, `command` and `stay-silent`, in that order. The
-5-second figure is only the probe's wait budget; it shows that no receive
-timeout is set, not how long a real aircraft takes to reply.
+All `15/15` checks pass. The stub received `command`, `takeoff`,
+`provoke-error`, `battery?`, `command`, `forward 20` and `stay-silent`, in that
+order. The 500 ms timeout is set by the probe; it shows that the timeout
+applies, not how long a real aircraft takes to reply.
 
 ## Not covered
 

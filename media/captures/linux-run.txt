@@ -5,8 +5,13 @@ openjdk version "11.0.32" 2026-07-21
 Apache Maven 3.9.16 (2bdd9fddda4b155ebf8000e807eb73fd829a51d5)
 Python 3.12.3
 
-=== mvn -B -q clean package
+=== mvn -B clean package (compiles and runs the JUnit suite)
 exit=0
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.153 s -- in ch.bissbert.command.creator.CommandExecutorTest
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in ch.bissbert.command.model.CommandModelTest
+Tests run: 19, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.518 s -- in ch.bissbert.connection.ConnectionTest
+Tests run: 39, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
 
 === python3 tools/inventory.py
 Sources under src/main/java/ch/bissbert/
@@ -14,44 +19,44 @@ Sources under src/main/java/ch/bissbert/
 file                                                 lines   bytes  write-up
 --------------------------------------------------------------------------------
 CommandStrings.java                                     70   1,426  docs/protocol.md
-command/creator/CommandExecutor.java                   109   2,876  docs/commands.md
+command/creator/CommandExecutor.java                   110   2,955  docs/commands.md
 command/creator/Reference.java                          16     275  docs/commands.md
 command/model/AbstractCommand.java                      36     756  docs/commands.md
 command/model/BasicCommand.java                         21     415  docs/commands.md
 command/model/Command.java                              26     506  docs/commands.md
 command/model/ComplexCommand.java                       45   1,182  docs/commands.md
 connection/CommandSender.java                           49   1,536  docs/connection.md
-connection/Connection.java                              72   2,322  docs/connection.md
+connection/Connection.java                             110   3,847  docs/connection.md
 connection/Drone.java                                   26     843  docs/connection.md
 connection/controller/AdvancedDroneController.java       9     245  docs/connection.md
 connection/controller/BasicDroneController.java          9     239  docs/connection.md
 connection/controller/DroneController.java              17     400  docs/connection.md
 connection/exception/NoConnectionException.java          9     251  docs/connection.md
 --------------------------------------------------------------------------------
-total (14 files)                                       514  13,272
+total (14 files)                                       553  14,876
 
 Markdown table:
 
 | Source | Lines | Bytes | Write-up |
 |---|---:|---:|---|
 | `CommandStrings.java` | 70 | 1,426 | [→](docs/protocol.md) |
-| `command/creator/CommandExecutor.java` | 109 | 2,876 | [→](docs/commands.md) |
+| `command/creator/CommandExecutor.java` | 110 | 2,955 | [→](docs/commands.md) |
 | `command/creator/Reference.java` | 16 | 275 | [→](docs/commands.md) |
 | `command/model/AbstractCommand.java` | 36 | 756 | [→](docs/commands.md) |
 | `command/model/BasicCommand.java` | 21 | 415 | [→](docs/commands.md) |
 | `command/model/Command.java` | 26 | 506 | [→](docs/commands.md) |
 | `command/model/ComplexCommand.java` | 45 | 1,182 | [→](docs/commands.md) |
 | `connection/CommandSender.java` | 49 | 1,536 | [→](docs/connection.md) |
-| `connection/Connection.java` | 72 | 2,322 | [→](docs/connection.md) |
+| `connection/Connection.java` | 110 | 3,847 | [→](docs/connection.md) |
 | `connection/Drone.java` | 26 | 843 | [→](docs/connection.md) |
 | `connection/controller/AdvancedDroneController.java` | 9 | 245 | [→](docs/connection.md) |
 | `connection/controller/BasicDroneController.java` | 9 | 239 | [→](docs/connection.md) |
 | `connection/controller/DroneController.java` | 17 | 400 | [→](docs/connection.md) |
 | `connection/exception/NoConnectionException.java` | 9 | 251 | [→](docs/connection.md) |
-| **total** | **514** | **13,272** | |
+| **total** | **553** | **14,876** | |
 
 Build output: 16 .class files in target/classes
-              target/tello4j-1.0-SNAPSHOT.jar  15,749 bytes
+              target/tello4j-1.0-SNAPSHOT.jar  16,243 bytes
 
 javac: javac 11.0.32
 
@@ -85,7 +90,7 @@ The enum stores the wire prefix only. `ComplexCommand` appends caller-supplied p
 
 Library behaviour against the local UDP stub
 ===================================================================================================
-Connection(host, port) constructs and connects               PASS  Connection(127.0.0.1, 46177) built
+Connection(host, port) constructs and connects               PASS  Connection(127.0.0.1, 58432) built
 sendCommand() emits the bare command as one datagram         PASS  sent "command"
 "ok" reply maps to sendCommandAndFetchStatus() == true       PASS  sendCommandAndFetchStatus("takeoff") -> true
 any other reply maps to false                                PASS  sendCommandAndFetchStatus("provoke-error") -> false
@@ -96,9 +101,10 @@ SET_WIFI composes to "wifi ssid", placeholder included       PASS  BasicCommand(
 ComplexCommand.addParam() adds a parameter                   PASS  addParam(20), compose() = "forward 20"
 CommandExecutor.run() throws NPE without createConnection()  PASS  run() threw java.lang.NullPointerException
 CommandExecutor.run() stops at the end of a chain            PASS  run() sent the command and returned
+CommandExecutor with withParam() sends its parameters        PASS  execute("forward").withParam(20).run() returned normally
 sendCommand() after close() throws NoConnectionException     PASS  threw ch.bissbert.connection.exception.NoConnectionException
-unresolvable host: constructor throws NPE                    PASS  constructor threw java.lang.NullPointerException
-fetchDataString() never times out when nothing replies       PASS  fetchDataString() still blocked after 5002 ms with no reply
+unresolvable host: constructor throws with the cause         PASS  constructor threw UncheckedIOException, cause java.net.UnknownHostException
+fetchDataString() times out when nothing replies             PASS  SocketTimeoutException after 512 ms (timeout 500 ms)
 
 Datagrams the stub received, in order:
    1.  7 bytes  b'command'
@@ -106,15 +112,16 @@ Datagrams the stub received, in order:
    3. 13 bytes  b'provoke-error'
    4.  8 bytes  b'battery?'
    5.  7 bytes  b'command'
-   6. 11 bytes  b'stay-silent'
+   6. 10 bytes  b'forward 20'
+   7. 11 bytes  b'stay-silent'
 
-14/14 checks passed
+15/15 checks passed
 
 Markdown table:
 
 | Check | Result | Observed |
 |---|:--:|---|
-| Connection(host, port) constructs and connects | yes | `Connection(127.0.0.1, 46177) built` |
+| Connection(host, port) constructs and connects | yes | `Connection(127.0.0.1, 58432) built` |
 | sendCommand() emits the bare command as one datagram | yes | `sent "command"` |
 | "ok" reply maps to sendCommandAndFetchStatus() == true | yes | `sendCommandAndFetchStatus("takeoff") -> true` |
 | any other reply maps to false | yes | `sendCommandAndFetchStatus("provoke-error") -> false` |
@@ -125,7 +132,8 @@ Markdown table:
 | ComplexCommand.addParam() adds a parameter | yes | `addParam(20), compose() = "forward 20"` |
 | CommandExecutor.run() throws NPE without createConnection() | yes | `run() threw java.lang.NullPointerException` |
 | CommandExecutor.run() stops at the end of a chain | yes | `run() sent the command and returned` |
+| CommandExecutor with withParam() sends its parameters | yes | `execute("forward").withParam(20).run() returned normally` |
 | sendCommand() after close() throws NoConnectionException | yes | `threw ch.bissbert.connection.exception.NoConnectionException` |
-| unresolvable host: constructor throws NPE | yes | `constructor threw java.lang.NullPointerException` |
-| fetchDataString() never times out when nothing replies | yes | `fetchDataString() still blocked after 5002 ms with no reply` |
+| unresolvable host: constructor throws with the cause | yes | `constructor threw UncheckedIOException, cause java.net.UnknownHostException` |
+| fetchDataString() times out when nothing replies | yes | `SocketTimeoutException after 512 ms (timeout 500 ms)` |
 exit=0
