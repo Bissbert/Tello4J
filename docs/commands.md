@@ -69,7 +69,9 @@ sequenceDiagram
 `andThen()` stores one successor. The last executor in a chain has none and
 stops after its own send or read (fixed in `35081a4`). `run()` does not create
 a connection: without `createConnection()` it throws `NullPointerException`.
-All executor instances share one static connection.
+All executor instances share one static connection. An executor with
+parameters keeps the successor and read target set before `withParam()` (bug 6
+in [Bugs found](BUGS-FOUND.md), fixed).
 For predictable behavior, the direct `Connection` API is easier to audit.
 
 ## Class responsibilities
