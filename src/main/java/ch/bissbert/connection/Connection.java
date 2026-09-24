@@ -4,6 +4,7 @@ import ch.bissbert.connection.exception.NoConnectionException;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -13,21 +14,58 @@ public class Connection implements AutoCloseable, CommandSender {
 
     private static final Logger logger = Logger.getLogger(Connection.class);
 
-    private final int port;
-    private InetAddress address;
-    private DatagramSocket socket;
+    /**
+     * How long a read waits for a reply by default. The Tello answers a
+     * movement command only once the movement ends, so this is generous.
+     */
+    public static final int DEFAULT_RECEIVE_TIMEOUT_MS = 15_000;
 
+    private final int port;
+    private final InetAddress address;
+    private final DatagramSocket socket;
+
+    /**
+     * Opens a datagram socket connected to {@code host:port}.
+     *
+     * @throws UncheckedIOException if the host does not resolve or the socket
+     *                              cannot be opened; the cause is the original
+     *                              {@link UnknownHostException} or {@link SocketException}
+     */
     public Connection(String host, int port) {
+        this(host, port, DEFAULT_RECEIVE_TIMEOUT_MS);
+    }
+
+    /**
+     * Like {@link #Connection(String, int)}, with a receive timeout in
+     * milliseconds. {@code 0} waits forever.
+     */
+    public Connection(String host, int port, int receiveTimeoutMs) {
         this.port = port;
         try {
             this.address = InetAddress.getByName(host);
-            this.socket = new DatagramSocket();
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException("Could not resolve Tello host " + host, e);
+        }
+        try {
+            this.socket = new DatagramSocket();
+            this.socket.setSoTimeout(receiveTimeoutMs);
         } catch (SocketException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException("Could not open a UDP socket for " + host + ":" + port, e);
         }
         this.connect();
+    }
+
+    /**
+     * Sets how long a read waits for a reply, in milliseconds. {@code 0} waits
+     * forever. A read that runs out of time throws
+     * {@link java.net.SocketTimeoutException}; nothing is retried.
+     */
+    public void setReceiveTimeout(int timeoutMs) throws SocketException {
+        socket.setSoTimeout(timeoutMs);
+    }
+
+    public int getReceiveTimeout() throws SocketException {
+        return socket.getSoTimeout();
     }
 
     private void connect() {

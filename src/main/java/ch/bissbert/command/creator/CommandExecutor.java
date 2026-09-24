@@ -89,15 +89,16 @@ public abstract class CommandExecutor {
     }
 
     private static class ComplexExecutor extends CommandExecutor {
-        private ComplexCommand command;
 
         public ComplexExecutor(BasicExecutor basicExecutor) {
             this.command = new ComplexCommand((BasicCommand) basicExecutor.command);
+            this.after = basicExecutor.after;
+            this.reference = basicExecutor.reference;
         }
 
         @Override
         public CommandExecutor withParam(Object object) {
-            command.addParam(object);
+            ((ComplexCommand) command).addParam(object);
             return this;
         }
 

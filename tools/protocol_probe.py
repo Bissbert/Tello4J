@@ -48,11 +48,13 @@ CHECK_LABELS = {
     "compose-basic":        'BasicCommand("up").compose() == "up"',
     "compose-enum":         "CommandStrings-backed command composes to its SDK word",
     "compose-wifi":         'SET_WIFI composes to "wifi ssid", placeholder included',
-    "complex-addparam":     "ComplexCommand.addParam() throws NullPointerException",
+    "complex-addparam":     "ComplexCommand.addParam() adds a parameter",
     "executor-no-connection": "CommandExecutor.run() throws NPE without createConnection()",
-    "executor-chain-tail":  "CommandExecutor.run() throws NPE at the end of a chain",
-    "send-after-close":     "sendCommand() after close() throws",
-    "no-so-timeout":        "fetchDataString() never times out when nothing replies",
+    "executor-chain-tail":  "CommandExecutor.run() stops at the end of a chain",
+    "executor-with-param":  "CommandExecutor with withParam() sends its parameters",
+    "send-after-close":     "sendCommand() after close() throws NoConnectionException",
+    "construct-bad-host":   "unresolvable host: constructor throws with the cause",
+    "receive-timeout":      "fetchDataString() times out when nothing replies",
 }
 
 

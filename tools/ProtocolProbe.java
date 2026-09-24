@@ -32,12 +32,12 @@ public class ProtocolProbe {
         complexCommandAddParam();
         executorRunWithoutConnection();
         executorChainTail();
+        executorWithParam();
         sendAfterClose();
-        receiveHasNoTimeout();
+        constructorBadHost();
+        receiveTimesOut();
 
         System.out.flush();
-        // A probe thread is still parked in receive(); do not wait for it.
-        Runtime.getRuntime().halt(0);
     }
 
     private static void check(String id, boolean pass, String detail) {
@@ -112,14 +112,16 @@ public class ProtocolProbe {
                 "BasicCommand(CommandStrings.SET_WIFI).compose() = " + quote(composed));
     }
 
-    /** ComplexCommand.parameters is declared but never assigned. */
+    /** Each ComplexCommand has its own parameter list (fixed in 42c9dff). */
     private static void complexCommandAddParam() {
         try {
-            new ComplexCommand("go", false).addParam(20);
-            check("complex-addparam", false, "addParam(20) returned normally");
+            ComplexCommand c = new ComplexCommand("forward", false);
+            c.addParam(20);
+            String composed = c.compose();
+            check("complex-addparam", "forward 20".equals(composed),
+                    "addParam(20), compose() = " + quote(composed));
         } catch (Throwable t) {
-            check("complex-addparam", t instanceof NullPointerException,
-                    "addParam(20) threw " + t.getClass().getName());
+            check("complex-addparam", false, "addParam(20) threw " + t.getClass().getName());
         }
     }
 
@@ -135,23 +137,37 @@ public class ProtocolProbe {
         }
     }
 
-    /** run() always calls after.run(); the last executor in a chain has no successor. */
+    /** The last executor in a chain has no successor and stops there (fixed in 35081a4). */
     private static void executorChainTail() {
         Connection c = new Connection(HOST, port);
         CommandExecutor.connection = c;
         try {
             CommandExecutor.execute(CommandStrings.COMMAND).run();
-            check("executor-chain-tail", false, "run() returned normally");
+            check("executor-chain-tail", true, "run() sent the command and returned");
         } catch (Throwable t) {
-            check("executor-chain-tail", t instanceof NullPointerException,
-                    "run() sent the command, then threw " + t.getClass().getName());
+            check("executor-chain-tail", false, "run() threw " + t.getClass().getName());
         } finally {
             CommandExecutor.connection = null;
             c.close();
         }
     }
 
-    /** DatagramSocket.isConnected() stays true after close(), so the guard misses. */
+    /** An executor with a parameter sends "word param" (fixed for #7). */
+    private static void executorWithParam() {
+        Connection c = new Connection(HOST, port);
+        CommandExecutor.connection = c;
+        try {
+            CommandExecutor.execute("forward").withParam(20).run();
+            check("executor-with-param", true, "execute(\"forward\").withParam(20).run() returned normally");
+        } catch (Throwable t) {
+            check("executor-with-param", false, "run() threw " + t.getClass().getName());
+        } finally {
+            CommandExecutor.connection = null;
+            c.close();
+        }
+    }
+
+    /** The guard also checks isClosed() (fixed in 8970c18). */
     private static void sendAfterClose() {
         Connection c = new Connection(HOST, port);
         c.close();
@@ -159,29 +175,39 @@ public class ProtocolProbe {
             c.sendCommand("land");
             check("send-after-close", false, "sendCommand() returned normally");
         } catch (Throwable t) {
-            check("send-after-close", true, t.getClass().getName() + ": " + t.getMessage());
+            check("send-after-close", t instanceof ch.bissbert.connection.exception.NoConnectionException,
+                    "threw " + t.getClass().getName());
         }
     }
 
-    /** No SO_TIMEOUT is ever set, so receive() parks forever when nothing replies. */
-    private static void receiveHasNoTimeout() throws Exception {
-        final Connection c = new Connection(HOST, port);
-        final long budgetMs = 5000;
-        Thread t = new Thread(() -> {
+    /** A setup failure is thrown with its cause (fixed for #6). */
+    private static void constructorBadHost() {
+        try (Connection c = new Connection("does-not-exist.invalid", port)) {
+            check("construct-bad-host", false, "constructor returned normally");
+        } catch (java.io.UncheckedIOException e) {
+            check("construct-bad-host", e.getCause() instanceof java.net.UnknownHostException,
+                    "constructor threw UncheckedIOException, cause " + e.getCause().getClass().getName());
+        } catch (Throwable t) {
+            check("construct-bad-host", false, "constructor threw " + t.getClass().getName());
+        }
+    }
+
+    /** A read with no reply ends with SocketTimeoutException (fixed for #5). */
+    private static void receiveTimesOut() {
+        final int timeoutMs = 500;
+        try (Connection c = new Connection(HOST, port, timeoutMs)) {
+            long t0 = System.nanoTime();
             try {
                 c.sendCommandAndFetchData("stay-silent");
-            } catch (Throwable ignored) {
-                // the probe exits via halt() while this thread is parked
+                check("receive-timeout", false, "fetchDataString() returned a reply");
+            } catch (java.net.SocketTimeoutException e) {
+                long waitedMs = (System.nanoTime() - t0) / 1_000_000;
+                check("receive-timeout", true,
+                        "SocketTimeoutException after " + waitedMs + " ms (timeout " + timeoutMs + " ms)");
             }
-        });
-        t.setDaemon(true);
-        long t0 = System.nanoTime();
-        t.start();
-        t.join(budgetMs);
-        long waitedMs = (System.nanoTime() - t0) / 1_000_000;
-        boolean stillBlocked = t.isAlive();
-        check("no-so-timeout", stillBlocked,
-                "fetchDataString() still blocked after " + waitedMs + " ms with no reply");
+        } catch (Exception e) {
+            check("receive-timeout", false, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
     }
 
     private static String quote(String s) {
